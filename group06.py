@@ -10,6 +10,7 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 # import item      # C君: 落ちてくる物体（アイテム）担当
 # import judge     # D君: 当たり判定＆スコア担当
 # import ui        # E君: UI（文字表示）＆BGM担当
+
 # import assets    # F君: グラフィック（素材・演出）担当
 # import ranking   # G君: リザルト画面（スコア記録・ランキング）担当
 
@@ -24,6 +25,46 @@ BLACK = (0, 0, 0)
 BLUE = (0, 100, 255)
 RED = (255, 50, 50)
 YELLOW = (255, 215, 0)
+
+class ScoreDisplay:
+    def __init__(self):
+        self.font=pygame.font.Font(None,50)
+        self.color=(0, 0, 255)
+        self.rect_center=(100,SCREEN_HEIGHT-50)
+       
+
+    def update(self,screen:pygame.Surface,current_score:int):
+       
+        self.image = self.font.render(f"Score: {current_score}", 0,self.color)
+        self.rect = self.image.get_rect()
+        self.rect.center = self.rect_center
+        screen.blit(self.image, self.rect)
+
+
+class TimeDisplay:
+    def __init__(self):
+        self.font = pygame.font.Font(None, 50)
+        self.normal_color = (0, 0, 255)
+        self.warning_color = (255, 0, 0)
+        self.rect_center = (300, SCREEN_HEIGHT - 50)
+
+    def _get_text(self, time_left: int) -> str:
+        minutes = time_left // 60
+        seconds = time_left % 60
+        return f"Time: {minutes}:{seconds:02d}"
+
+    def _get_color(self, time_left: int):
+        if time_left <= 10:
+            return self.warning_color
+        else: 
+            return self.normal_color
+
+    def update(self, screen: pygame.Surface, time_left: int):
+        self.image = self.font.render(self._get_text(time_left), 0, self._get_color(time_left))
+        self.rect = self.image.get_rect()
+        self.rect.center = self.rect_center
+        screen.blit(self.image, self.rect)
+
 
 
 def main():
@@ -40,6 +81,10 @@ def main():
     # --- [D君・G君合流用変数] スコア管理の土台 ---
     current_score = 0  # 今回のスコア（D君がゲーム中に加算する）
     high_score = 0     # 最高スコア（G君がファイルから読み込む）
+    time_left=30
+    
+    score_display=ScoreDisplay()
+    time_display=TimeDisplay()
 
     # ［G君の合流ポイント①: ゲーム起動時に最高スコアを読み込む］
     # 例: high_score = ranking.load_highscore()
@@ -54,6 +99,19 @@ def main():
     # フォントの用意（E君・G君のUI表示用フォントが決まるまでの暫定）
     font = pygame.font.SysFont(None, 48)
     small_font = pygame.font.SysFont(None, 36)
+    start_bg=pygame.image.load("start_image.jpg").convert()
+    start_bg=pygame.transform.scale(start_bg,(SCREEN_WIDTH,SCREEN_HEIGHT))
+
+    play_bg=pygame.image.load("play_image.jpg").convert()
+    play_bg=pygame.transform.scale(play_bg,(SCREEN_WIDTH,SCREEN_HEIGHT))
+
+    score_display=ScoreDisplay()
+    time_display=TimeDisplay()
+
+    pygame.mixer.init()
+    pygame.mixer.music.load("start_music.mp3")
+    pygame.mixer.music.set_volume(1.5)
+    pygame.mixer.music.play(-1)
 
     running = True
     while running:
@@ -74,6 +132,10 @@ def main():
                         # タイトル画面でスペースキーを押したらゲーム開始
                         current_score = 0  # スコアをリセット
                         game_state = "PLAY"
+                        #プレイ画面のBGMを切り替える
+                        pygame.mixer.music.load("play_music.mp3")
+                        pygame.mixer.music.set_volume(1.5)
+                        pygame.mixer.music.play(-1)
 
                 elif game_state == "PLAY":
                     # ［B君の合流ポイント①］
@@ -84,6 +146,11 @@ def main():
                     if event.key == pygame.K_SPACE:
                         # ゲームオーバー画面でスペースキーを押したらタイトルに戻る
                         game_state = "TITLE"
+                        #タイトル画面のＢＧＭを切り替える
+                        pygame.mixer.music.load("start_music.mp3")
+                        pygame.mixer.music.set_volume(0.5)
+                        pygame.mixer.music.play(-1)
+
 
         # ==========================================
         # 2. データ更新処理（ゲームロジック）
@@ -111,7 +178,9 @@ def main():
                         f.write(str(high_score))
 
         elif game_state == "GAMEOVER":
-            pass
+            time_display.value-=1
+            if time_display.value<=0:
+                game_state="GAMEOVER"
 
         # ==========================================
         # 3. 描画処理（画面への表示）
@@ -120,19 +189,22 @@ def main():
 
         if game_state == "TITLE":
             # タイトル画面の描画（E君・F君の素材が来るまでの暫定表示）
-            title_text = font.render("FALLING CATCH GAME", True, BLUE)
+            screen.blit(start_bg,(0,0))
+            title_text = font.render("FALLING CATCH GAME", True,(255,215,0))
             start_text = font.render("Press SPACE to Start", True, WHITE)
             screen.blit(title_text, (200, 200))
             screen.blit(start_text, (230, 350))
 
         elif game_state == "PLAY":
+            screen.blit(play_bg,(0,0))
+
             # ［F君・B君の合流ポイント: プレイヤー（カゴ）の描画］
             # ［F君・C君の合流ポイント: アイテム（果物・爆弾）の描画］
             # ［E君の合流ポイント①: 画面上部への「現在のスコア」や「残り時間」の文字描画］
-
-            # MVP確認用の暫定表示
-            play_text = font.render("Playing... (Press Enter to Lose)", True, WHITE)
-            screen.blit(play_text, (150, 250))
+            
+             # MVP確認用の暫定表示
+            score_display.update(screen,current_score)
+            time_display.update(screen,time_left)
 
         elif game_state == "GAMEOVER":
             # ［G君の合流ポイント③: リザルト画面の描画（A君の画面を乗っ取る）］
