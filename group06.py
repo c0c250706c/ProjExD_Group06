@@ -32,12 +32,12 @@ CYAN = (255, 122, 0) #追加
 
 # 落ちてくるアイテム
 ITEM_DEFINITIONS = [
-    {"file": "apple.png", "type": "good"},
-    {"file": "banana.png", "type": "good"},
-    {"file": "peach.png", "type": "good"},
-    {"file": "strawberry.png", "type": "good"},
-    {"file": "watermelon.png", "type": "good"},
-    {"file": "avocado_dmg.png", "type": "bad"},  # これだけマイナスアイテム
+    {"file": "img/apple.png", "type": "good"},
+    {"file": "img/banana.png", "type": "good"},
+    {"file": "img/peach.png", "type": "good"},
+    {"file": "img/strawberry.png", "type": "good"},
+    {"file": "img/watermelon.png", "type": "good"},
+    {"file": "img/avocado_dmg.png", "type": "bad"},  # これだけマイナスアイテム
 ]
 
 FONT_FILE = "PixelMplus12-Regular.ttf" #追加G　使用するドットフォントのファイル名
@@ -229,7 +229,7 @@ def main():
     player_rect = player_img.get_rect() 
     player_rect.centerx = SCREEN_WIDTH // 2 
     player_rect.bottom = SCREEN_HEIGHT - 20 
-    player_speed = 5
+    player_speed = 8
     """
     こうかとんの画像は笑顔の「9.png」を使用しています
     こうかとんはゲーム開始時画面の下側、中央のにいます
@@ -268,33 +268,44 @@ def main():
     # フォントの用意（E君・G君のUI表示用フォントが決まるまでの暫定）
     font = pygame.font.SysFont(None, 48)
     small_font = pygame.font.SysFont(None, 36)
-    start_bg=pygame.image.load("start_image.jpg").convert()
+    start_bg=pygame.image.load("img/start_image.jpg").convert()
     start_bg=pygame.transform.scale(start_bg,(SCREEN_WIDTH,SCREEN_HEIGHT))
-    play_bg=pygame.image.load("play_image.jpg").convert()
+    play_bg=pygame.image.load("img/play_image.jpg").convert()
     play_bg=pygame.transform.scale(play_bg,(SCREEN_WIDTH,SCREEN_HEIGHT))
 
     score_display=ScoreDisplay()
     time_display=TimeDisplay()
 
     pygame.mixer.init()
-    pygame.mixer.music.load("start_music.mp3")
+    pygame.mixer.music.load("music/start_music.mp3")
     pygame.mixer.music.set_volume(1.5)
     pygame.mixer.music.play(-1)
+    get_sound = pygame.mixer.Sound("music/get_music.mp3")
+    damage_sound=pygame.mixer.Sound("music/damage_music.mp3")
+
 
     #追加G　タイマー用の変数準備
     start_ticks = 0
     time_left = 30
     
 
-    start_bg = pygame.image.load("start_image.jpg").convert()
+    start_bg = pygame.image.load("img/start_image.jpg").convert()
     start_bg = pygame.transform.scale(start_bg, (SCREEN_WIDTH, SCREEN_HEIGHT))
-    play_bg = pygame.image.load("play_image.jpg").convert()
+    play_bg = pygame.image.load("img/play_image.jpg").convert()
     play_bg = pygame.transform.scale(play_bg, (SCREEN_WIDTH, SCREEN_HEIGHT))
-    fruit_image = pygame.image.load("appel.png")
+    item_images = []
+    for item_def in ITEM_DEFINITIONS:
+        image = pygame.image.load(item_def["file"])
+        item_images.append({"image": image, "type": item_def["type"]})
+
+    current_item = random.choice(item_images)
+    fruit_image = current_item["image"]
+    fruit_type = current_item["type"]
     fruit_rect = fruit_image.get_rect()
     fruit_rect.x = random.randint(0, SCREEN_WIDTH - fruit_rect.width)
     fruit_rect.y = -fruit_rect.height
     fruit_speed = random.randint(3, 8)
+
 
     running = True
     while running:
@@ -351,19 +362,38 @@ def main():
             画面外には行けないようにしています
             """
 
-            # ［C君의 合流ポイント①: アイテムの落下更新］
-            
+            # ［C君合流ポイント①: アイテムの落下更新］
             fruit_rect.y += fruit_speed
             if fruit_rect.top > SCREEN_HEIGHT:
+                current_item = random.choice(item_images)
+                fruit_image = current_item["image"]
+                fruit_type = current_item["type"]
+                fruit_rect = fruit_image.get_rect()
                 fruit_rect.x = random.randint(0, SCREEN_WIDTH - fruit_rect.width)
                 fruit_rect.y = -fruit_rect.height
                 fruit_speed = random.randint(3, 8)
+
             # ［D君の合流ポイント①: 当たり判定の計算とスコアの加減算］
             # ※ 'player_rect' と 'active_items' は他のメンバーの変数名に合わせて調整してください
-            plus_score = score_manager.check_collisions(player_rect, [{"type": "good", "rect": fruit_rect}])
-            if plus_score != 0:
-                fruit_rect.top = SCREEN_HEIGHT + 100
-                current_score += plus_score
+
+            if player_rect.colliderect(fruit_rect):
+                if fruit_type == "good":
+                    current_score += 10
+                    get_sound.play()
+                elif fruit_type == "bad":
+                    current_score -= 20
+                    damage_sound.play()
+                    if current_score < 0:
+                        current_score = 0
+             
+                current_item = random.choice(item_images)
+                fruit_image = current_item["image"]
+                fruit_type = current_item["type"]
+                fruit_rect = fruit_image.get_rect()
+                fruit_rect.x = random.randint(0, SCREEN_WIDTH-fruit_rect.width)
+                fruit_rect.y = -fruit_rect.height
+                fruit_speed = random.randint(3, 8)
+
             elapsed_seconds = (pygame.time.get_ticks() - start_ticks) / 1000 #追加G　残り時間の計算
             time_left = 30 - elapsed_seconds
             
@@ -420,6 +450,7 @@ def main():
             # ［F君・B君の合流ポイント: プレイヤー（カゴ）の描画］
             # ［F君・C君の合流ポイント: アイテム（果物・爆弾）の描画］
             screen.blit(fruit_image, fruit_rect)
+        
             # ［E君の合流ポイント①: 画面上部への「現在のスコア」や「残り時間」の文字描画］
             time_text = font.render(f"TIME: {int(time_left)}",True, WHITE)#追加G　残り時間の表示
             screen.blit(time_text, (20,20))
