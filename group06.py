@@ -2,7 +2,6 @@ import sys
 import os
 import random
 import pygame
-import random
 
 
 # 実行ファイルのディレクトリにカレントディレクトリを変更（素材やスコアファイルの読み込みエラー防止）
@@ -139,8 +138,8 @@ class Bird:
                 sum_mv[0] += mv[0]
                 sum_mv[1] += mv[1]
         self.rct.move_ip(sum_mv)
-        if check_bound(self.rct) != (True, True):
-            self.rct.move_ip(-sum_mv[0], -sum_mv[1])
+        # if check_bound(self.rct) != (True, True):
+        #     self.rct.move_ip(-sum_mv[0], -sum_mv[1])
         if not (sum_mv[0] == 0 and sum_mv[1] == 0):
             self.img = __class__.imgs[tuple(sum_mv)]
         screen.blit(self.img, self.rct)
@@ -162,6 +161,7 @@ def load_highscore():
 def check_and_save_highscore(current_score, current_highscore):
     """今回のスコアがハイスコアを超えていたらファイルに保存する関数"""
     if current_score > current_highscore:
+        current_highscore = current_score
         with open(HIGHSCORE_FILE, "w") as f:
             f.write(str(current_score))
         return current_score  # 新しいハイスコアを返す
@@ -223,13 +223,15 @@ def main():
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     pygame.display.set_caption("落ち物キャッチゲーム")
     clock = pygame.time.Clock()
+    with open(HIGHSCORE_FILE, "w") as f:
+        f.write("0")   
 
     #こうかとんの初期設定
     player_img = pygame.image.load("fig/9.png")  
     player_rect = player_img.get_rect() 
     player_rect.centerx = SCREEN_WIDTH // 2 
     player_rect.bottom = SCREEN_HEIGHT - 20 
-    player_speed = 8
+    player_speed = 10
     """
     こうかとんの画像は笑顔の「9.png」を使用しています
     こうかとんはゲーム開始時画面の下側、中央のにいます
@@ -244,11 +246,11 @@ def main():
     current_score = 0  # 今回のスコア（D君がゲーム中に加算する）
     high_score = 0     # 最高スコア（G君がファイルから読み込む）
     time_left=30 
-    # high_score =load_highscore() #ゲーム機同時に最高スコアを読み込む
+    high_score =load_highscore() #ゲーム機同時に最高スコアを読み込む
     score_manager = ScoreManager() #class のインスタンス化
 
-    score_display=ScoreDisplay()
-    time_display=TimeDisplay()
+    # score_display=ScoreDisplay()
+    # time_display=TimeDisplay()
 
 
     # ［G君の合流ポイント①: ゲーム起動時に最高スコアを読み込む］
@@ -266,8 +268,8 @@ def main():
         large_font = pygame.font.SysFont(None, 64)
         
     # フォントの用意（E君・G君のUI表示用フォントが決まるまでの暫定）
-    font = pygame.font.SysFont(None, 48)
-    small_font = pygame.font.SysFont(None, 36)
+    # font = pygame.font.SysFont(None, 48)
+    # small_font = pygame.font.SysFont(None, 36)
     start_bg=pygame.image.load("img/start_image.jpg").convert()
     start_bg=pygame.transform.scale(start_bg,(SCREEN_WIDTH,SCREEN_HEIGHT))
     play_bg=pygame.image.load("img/play_image.jpg").convert()
@@ -281,32 +283,30 @@ def main():
     pygame.mixer.music.set_volume(1.5)
     pygame.mixer.music.play(-1)
     get_sound = pygame.mixer.Sound("music/get_music.mp3")
-    damage_sound=pygame.mixer.Sound("music/damage_music.mp3")
-
-
+    damage_sound = pygame.mixer.Sound("music/damage_music.mp3") # ダメージ音もセットで！
     #追加G　タイマー用の変数準備
     start_ticks = 0
     time_left = 30
-    
-
-    start_bg = pygame.image.load("img/start_image.jpg").convert()
-    start_bg = pygame.transform.scale(start_bg, (SCREEN_WIDTH, SCREEN_HEIGHT))
-    play_bg = pygame.image.load("img/play_image.jpg").convert()
-    play_bg = pygame.transform.scale(play_bg, (SCREEN_WIDTH, SCREEN_HEIGHT))
+        
     item_images = []
     for item_def in ITEM_DEFINITIONS:
         image = pygame.image.load(item_def["file"])
         item_images.append({"image": image, "type": item_def["type"]})
+    # current_item = random.choice(item_images)
+    # fruit_image = current_item["image"]
+    # fruit_type = current_item["type"]
+    # fruit_rect = fruit_image.get_rect()
+    # fruit_rect.x = random.randint(0, SCREEN_WIDTH - fruit_rect.width)
+    # fruit_rect.y = -fruit_rect.height
+    # fruit_speed = random.randint(3, 8)
 
-    current_item = random.choice(item_images)
-    fruit_image = current_item["image"]
-    fruit_type = current_item["type"]
-    fruit_rect = fruit_image.get_rect()
-    fruit_rect.x = random.randint(0, SCREEN_WIDTH - fruit_rect.width)
-    fruit_rect.y = -fruit_rect.height
-    fruit_speed = random.randint(3, 8)
-
-
+    active_items = [] 
+    # フルーツ出現制御用
+    last_spawn_time = 0
+    spawn_interval = 500  # ミリ秒（0.5秒）
+    
+    LANES = [50, 200, 350, 500, 650]  # フルーツが落ちてくる5つの横位置
+    last_lane_idx = -1                # 前回選んだレーンの番号を保存する変数
     running = True
     while running:
         # FPS（フレームレート）の設定
@@ -327,6 +327,9 @@ def main():
                         current_score = 0  # スコアをリセット
                         time_left = 30
                         start_ticks = pygame.time.get_ticks() #追加G　タイマー開始
+                        active_items.clear() #（前のプレイのフルーツを全部消す）
+                        player_rect.centerx = SCREEN_WIDTH // 2
+                        player_rect.bottom = SCREEN_HEIGHT - 20
                         game_state = "PLAY"
 
                 elif game_state == "PLAY":
@@ -363,36 +366,99 @@ def main():
             """
 
             # ［C君合流ポイント①: アイテムの落下更新］
-            fruit_rect.y += fruit_speed
-            if fruit_rect.top > SCREEN_HEIGHT:
-                current_item = random.choice(item_images)
-                fruit_image = current_item["image"]
-                fruit_type = current_item["type"]
-                fruit_rect = fruit_image.get_rect()
-                fruit_rect.x = random.randint(0, SCREEN_WIDTH - fruit_rect.width)
-                fruit_rect.y = -fruit_rect.height
-                fruit_speed = random.randint(3, 8)
+            # ［C君合流ポイント①: アイテムの落下更新］
+            # 1. ランダムなタイミングで新しいアイテムを生成（例: 毎フレーム約5%の確率）
+            # if random.randint(1, 100) <= 5: 
+            #     new_item = random.choice(item_images)
+            #     new_rect = new_item["image"].get_rect()
+            #     new_rect.x = random.randint(0, SCREEN_WIDTH - new_rect.width)
+            #     new_rect.y = -new_rect.height
+            #     # 速度を早くする（元の3〜8から、5〜12に変更。好みで調整してください）
+            #     new_speed = random.randint(3, 6) 
+            # フルーツ出現制御
+            now = pygame.time.get_ticks()
+        # ずっと同じ頻度で「まばら」に落とす（0.8秒に1個）
+            spawn_interval = 350
+
+            if now - last_spawn_time > spawn_interval:
+                last_spawn_time = now
+                spawn_interval = random.randint(250, 450)
+                new_item = random.choice(item_images)
+                new_rect = new_item["image"].get_rect()
+                # 前回落とした場所（レーン）の「お隣」に流れるように落とす
+                if last_lane_idx == -1:
+                    last_lane_idx = random.randint(0, len(LANES) - 1)
+                else:
+                    # ランダムに選ぶが、前回と「同じレーン」になったら引き直す
+                    next_lane = random.randint(0, len(LANES) - 1)
+                    while next_lane == last_lane_idx:
+                        next_lane = random.randint(0, len(LANES) - 1)
+                    last_lane_idx = next_lane
+                    # 端っこにいるときは、自動的に内側のレーンに戻す（端に溜まるのを防ぐ）
+                    if last_lane_idx == 0:
+                        last_lane_idx = 1
+                    elif last_lane_idx == len(LANES) - 1:
+                        last_lane_idx = len(LANES) - 2
+                    else:
+                        last_lane_idx += random.choice([-1, 1]) # 必ず左右どちらかに動く
+                    # step = random.choice([-1, 0, 1])  # 左隣、同じ場所、右隣
+                    # last_lane_idx = max(0, min(len(LANES) - 1, last_lane_idx + step))
+                # new_rect = new_item["image"].get_rect()
+                # 固定されたレーン位置から、左右に「-35 〜 +35ピクセル」のランダムなズレを加えます。
+                # これにより、縦にきれいに並びすぎる機械的な不自然さが消え、自然にまばらになります。
+                offset = random.randint(-35, 35)
+                new_rect.x = LANES[last_lane_idx] + offset #random.randint(0, SCREEN_WIDTH - new_rect.width)
+                new_rect.y = -new_rect.height
+
+                # 全て一定のスピードにする（ここでは「4」ピクセルずつ）
+                new_speed = random.randint(6, 10)
+ 
+                # リストにアイテムの情報をひとまとめにして追加
+                active_items.append({
+                    "image": new_item["image"],
+                    "type": new_item["type"],
+                    "rect": new_rect,
+                    "speed": new_speed
+                    })
+
+            # 2. リスト内の全アイテムを移動させ、画面外に出たら削除する
+            for item in active_items[:]: # [:]をつけてコピーをループすると削除が安全に行えます
+                item["rect"].y += item["speed"]
+                if item["rect"].top > SCREEN_HEIGHT:
+                    active_items.remove(item)
+                    # fruit_rect.y += fruit_speed
+                    # if fruit_rect.top > SCREEN_HEIGHT:
+                    #     current_item = random.choice(item_images)
+                    #     fruit_image = current_item["image"]
+                    #     fruit_type = current_item["type"]
+                    #     fruit_rect = fruit_image.get_rect()
+                    #     fruit_rect.x = random.randint(0, SCREEN_WIDTH - fruit_rect.width)
+                    #     fruit_rect.y = -fruit_rect.height
+                    #     fruit_speed = random.randint(3, 8)
 
             # ［D君の合流ポイント①: 当たり判定の計算とスコアの加減算］
             # ※ 'player_rect' と 'active_items' は他のメンバーの変数名に合わせて調整してください
-
-            if player_rect.colliderect(fruit_rect):
-                if fruit_type == "good":
-                    current_score += 10
-                    get_sound.play()
-                elif fruit_type == "bad":
-                    current_score -= 20
-                    damage_sound.play()
-                    if current_score < 0:
-                        current_score = 0
-             
-                current_item = random.choice(item_images)
-                fruit_image = current_item["image"]
-                fruit_type = current_item["type"]
-                fruit_rect = fruit_image.get_rect()
-                fruit_rect.x = random.randint(0, SCREEN_WIDTH-fruit_rect.width)
-                fruit_rect.y = -fruit_rect.height
-                fruit_speed = random.randint(3, 8)
+            for item in active_items[:]:
+                if player_rect.colliderect(item["rect"]):
+                    if item["type"] == "good":
+                        current_score += 10
+                        get_sound.play()
+                    elif item["type"] == "bad":
+                        current_score -= 20
+                        damage_sound.play()
+                        if current_score < 0:
+                            current_score = 0
+                        # キャッチしたアイテムを画面から消す
+                    active_items.remove(item)
+                    
+                    
+            # current_item = random.choice(item_images)
+            # fruit_image = current_item["image"]
+            # fruit_type = current_item["type"]
+            # fruit_rect = fruit_image.get_rect()
+            # fruit_rect.x = random.randint(0, SCREEN_WIDTH-fruit_rect.width)
+            # fruit_rect.y = -fruit_rect.height
+            # fruit_speed = random.randint(3, 8)
 
             elapsed_seconds = (pygame.time.get_ticks() - start_ticks) / 1000 #追加G　残り時間の計算
             time_left = 30 - elapsed_seconds
@@ -401,6 +467,7 @@ def main():
             if time_left <= 0: 
                 time_left = 0
                 high_score = check_and_save_highscore(current_score, high_score) #ハイスコアを判定して保存
+                high_score = load_highscore()
                 game_state = "GAMEOVER"
 
             
@@ -432,25 +499,15 @@ def main():
             screen.blit(start_text, (230, 350))
         elif game_state == "PLAY":
             screen.blit(play_bg,(0,0))
-
-        #     #タイトル画面を（ドット風、中央揃え）
-        #     title_text = large_font.render("FALLING CATCH GAME", True, ORANGE)  
-        #     start_text = font.render("Press SPACE to Start", True, WHITE)  
-
-        #     title_rect=title_text.get_rect(center=(SCREEN_WIDTH//2,200))   #スタートタイトルの位置設定（画面中央ｘ＝400、y＝200）
-        #     start_rect=start_text.get_rect(center=(SCREEN_WIDTH//2,400)) #スタート文字の位置設定（画面中央X＝400、ｙ＝400)
-           
-        #    # 画面に描画
-        #     screen.blit(title_text, title_rect)
-        #     screen.blit(start_text, start_rect)
-
-        # elif game_state == "PLAY":
             screen.blit(player_img, player_rect) 
             """スクリーンにこうかとんを映しています"""
             # ［F君・B君の合流ポイント: プレイヤー（カゴ）の描画］
             # ［F君・C君の合流ポイント: アイテム（果物・爆弾）の描画］
-            screen.blit(fruit_image, fruit_rect)
-        
+            # screen.blit(fruit_image, fruit_rect)
+        # ［F君・C君の合流ポイント: アイテム（果物・爆弾）の描画］
+            for item in active_items:
+                screen.blit(item["image"], item["rect"])
+                
             # ［E君の合流ポイント①: 画面上部への「現在のスコア」や「残り時間」の文字描画］
             time_text = font.render(f"TIME: {int(time_left)}",True, WHITE)#追加G　残り時間の表示
             screen.blit(time_text, (20,20))
@@ -468,7 +525,9 @@ def main():
             over_text = font.render("TIME OVER", True, ORANGE)
             over_rect = over_text.get_rect(center=(SCREEN_WIDTH // 2, 150))
             screen.blit(over_text, over_rect)
-
+            
+            
+            # スコアとハイスコアの表示（G君の担当箇所）
             score_text = small_font.render(f"YOUR SCORE: {current_score}", True, WHITE)
             highscore_text = small_font.render(f"HI-SCORE: {high_score}", True, YELLOW)
 
@@ -482,18 +541,6 @@ def main():
             screen.blit(retry_text, (260, 450))
             # G君が作成した文字配置や、F君が作ったリザルト背景などをここで描画する
             
-            # スコアとハイスコアの表示（G君の担当箇所）
-            score_text = small_font.render(f"YOUR SCORE: {current_score}", True, WHITE)
-            highscore_text = small_font.render(f"HI-SCORE: {high_score}", True, YELLOW)
-            score_rect = score_text.get_rect(center=(SCREEN_WIDTH // 2, 270))
-            highscore_rect = highscore_text.get_rect(center=(SCREEN_WIDTH // 2, 340))
-            screen.blit(score_text, score_rect)
-            screen.blit(highscore_text, highscore_rect)
-            
-            
-        # retry_text = small_font.render("Press SPACE to Title", True, WHITE)
-        # screen.blit(retry_text, (260, 450))
-
         # 画面の更新
         pygame.display.flip()
 
